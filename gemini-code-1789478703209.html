@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registo de Itens para o Colégio</title>
+    <link rel="icon" href="school.png" type="image/x-icon">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 sm:p-6 font-sans">
+    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md p-6">
+        <h1 class="text-2xl font-bold text-slate-800 mb-1" style="color:darkmagenta; text-align: center; font-family: Brush Script MT, Brush Script Std, cursive; font-size: 35px;">Analiz Maciel da Silva Baptista</h1><br>
+        <h2 style="color:blue; font-weight: bold;">Mala do Colégio</h2>
+        <p class="text-sm text-slate-500 mb-6">Marca o item para registar a data/hora do envio.</p>
+        
+        <!-- Form para adicionar novos itens -->
+        <form id="itemForm" class="flex gap-2 mb-6">
+            <input type="text" id="itemInput" placeholder="Ex: Mochila, Casaco, Lancheira..." required
+                   class="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <button type="submit" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                Adicionar
+            </button>
+        </form>
+
+        <!-- Lista de itens -->
+        <ul id="itemList" class="space-y-4"></ul><br>
+        <p id="currentDateTime" class="text-center text-sm font-semibold text-slate-600 mb-6" style="font-family: Jazz LET, fantasy;"></p>
+    </div>
+
+    <style>
+        body {
+            background-image: url(mochilasnocorredordaescola.jpg);
+            background-repeat: no-repeat;
+            background-position: center;
+            /*background-size: cover;*/
+        }
+    </style>
+
+    <script>
+        const form = document.getElementById('itemForm');
+        const input = document.getElementById('itemInput');
+        const list = document.getElementById('itemList');
+        const currentDateTime = document.getElementById('currentDateTime');
+
+        // Carregar itens do LocalStorage
+        let items = JSON.parse(localStorage.getItem('colegio_items_v2')) || [
+            { id: 1, name: 'Mochila', history: [] },
+            { id: 2, name: 'Garrafa de Água', history: [] },
+            { id: 3, name: 'Muda de Roupa', history: [] }
+        ];
+
+        function saveAndRender() {
+            localStorage.setItem('colegio_items_v2', JSON.stringify(items));
+            render();
+        }
+
+        function formatDate() {
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `${day}/${month}/${year} às ${hours}:${minutes}`;
+        }
+
+        function updateCurrentDateTime() {
+            currentDateTime.textContent = new Intl.DateTimeFormat('pt-PT', {
+                dateStyle: 'full',
+                timeStyle: 'medium'
+            }).format(new Date());
+        }
+
+        updateCurrentDateTime();
+        setInterval(updateCurrentDateTime, 1000);
+
+        function checkItem(id) {
+            items = items.map(item => {
+                if (item.id === id) {
+                    // Adiciona o novo registo de data ao início do histórico do item
+                    const updatedHistory = [formatDate(), ...item.history];
+                    return {
+                        ...item,
+                        history: updatedHistory
+                    };
+                }
+                return item;
+            });
+            saveAndRender();
+        }
+
+        function deleteItem(id) {
+            items = items.filter(item => item.id !== id);
+            saveAndRender();
+        }
+
+        function clearHistory(id) {
+            items = items.map(item => {
+                if (item.id === id) {
+                    return { ...item, history: [] };
+                }
+                return item;
+            });
+            saveAndRender();
+        }
+
+        function render() {
+            list.innerHTML = '';
+            
+            if (items.length === 0) {
+                list.innerHTML = `<li class="text-center text-slate-400 text-sm py-4">Nenhum item na lista.</li>`;
+                return;
+            }
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'p-3 rounded-lg border bg-slate-50 border-slate-200';
+
+                const lastCheck = item.history.length > 0 ? item.history[0] : null;
+
+                li.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <!-- Checkbox sempre desmarcado para novos registos -->
+                            <input type="checkbox" 
+                                   onchange="checkItem(${item.id})"
+                                   class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer">
+                            <span class="text-sm font-semibold text-slate-800">
+                                ${item.name}
+                            </span>
+                        </div>
+                        <button onclick="deleteItem(${item.id})" class="text-slate-400 hover:text-red-500 text-xs">
+                            Eliminar
+                        </button>
+                    </div>
+
+                    <!-- Exibição do último registo e histórico -->
+                    ${lastCheck ? `
+                        <div class="mt-2 pl-8 text-xs text-slate-600">
+                            <span class="font-medium text-green-700">Último envio:</span> ${lastCheck}
+                            ${item.history.length > 1 ? `
+                                <details class="mt-1">
+                                    <summary class="cursor-pointer text-blue-600 hover:underline">Ver histórico anterior (${item.history.length})</summary>
+                                    <ul class="mt-1 space-y-1 pl-2 border-l-2 border-slate-300">
+                                        ${item.history.slice(1).map(h => `<li>${h}</li>`).join('')}
+                                    </ul>
+                                </details>
+                            ` : ''}
+                        </div>
+                    ` : `
+                        <div class="mt-1 pl-8 text-xs text-slate-400 italic">Nenhum registo efetuado.</div>
+                    `}
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = input.value.trim();
+            if (name) {
+                items.push({
+                    id: Date.now(),
+                    name: name,
+                    history: []
+                });
+                input.value = '';
+                saveAndRender();
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>
