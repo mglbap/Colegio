@@ -42,6 +42,8 @@
         const input = document.getElementById('itemInput');
         const list = document.getElementById('itemList');
         const currentDateTime = document.getElementById('currentDateTime');
+        let editingItemId = null;
+        let editingHistoryDate = null;
 
         // Carregar itens do LocalStorage
         let items = JSON.parse(localStorage.getItem('colegio_items_v2')) || [
@@ -55,14 +57,18 @@
             render();
         }
 
-        function formatDate() {
-            const now = new Date();
-            const day = String(now.getDate()).padStart(2, '0');
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const year = now.getFullYear();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
+        function formatDate(date = new Date()) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
             return `${day}/${month}/${year} às ${hours}:${minutes}`;
+        }
+
+        function dateToInputValue(value) {
+            const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4}) às (\d{2}):(\d{2})$/);
+            return match ? `${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}` : '';
         }
 
         function updateCurrentDateTime() {
@@ -90,19 +96,116 @@
             saveAndRender();
         }
 
-        function deleteItem(id) {
-            items = items.filter(item => item.id !== id);
+        function deleteHistoryDate(itemId, historyIndex) {
+            items = items.map(item => {
+                if (item.id !== itemId) {
+                    return item;
+                }
+
+                const history = item.history.filter((_, index) => index !== historyIndex);
+                return { ...item, history };
+            });
             saveAndRender();
         }
 
-        function clearHistory(id) {
-            items = items.map(item => {
-                if (item.id === id) {
-                    return { ...item, history: [] };
-                }
-                return item;
-            });
+        function editItem(id) {
+            editingItemId = id;
+            render();
+            document.getElementById(`editItemInput-${id}`).focus();
+        }
+
+        function saveItemEdit(id) {
+            const input = document.getElementById(`editItemInput-${id}`);
+            const trimmedName = input.value.trim();
+            if (!trimmedName) {
+                alert('O nome do item não pode ficar vazio.');
+                input.focus();
+                return;
+            }
+
+            items = items.map(currentItem =>
+                currentItem.id === id ? { ...currentItem, name: trimmedName } : currentItem
+            );
+            editingItemId = null;
             saveAndRender();
+        }
+
+        function cancelItemEdit() {
+            editingItemId = null;
+            render();
+        }
+
+        function editHistoryDate(itemId, historyIndex) {
+            editingHistoryDate = { itemId, historyIndex };
+            render();
+            document.getElementById(`editHistoryDate-${itemId}-${historyIndex}`).focus();
+        }
+
+        function saveHistoryDate(itemId, historyIndex) {
+            const input = document.getElementById(`editHistoryDate-${itemId}-${historyIndex}`);
+            const date = input.value ? new Date(input.value) : null;
+            if (!date || Number.isNaN(date.getTime())) {
+                alert('Escolha uma data e hora válidas.');
+                input.focus();
+                return;
+            }
+
+            items = items.map(item => {
+                if (item.id !== itemId || !item.history[historyIndex]) {
+                    return item;
+                }
+
+                const history = [...item.history];
+                history[historyIndex] = formatDate(date);
+                return { ...item, history };
+            });
+            editingHistoryDate = null;
+            saveAndRender();
+        }
+
+        function cancelHistoryDateEdit() {
+            editingHistoryDate = null;
+            render();
+        }
+
+        function renderHistoryDate(item, historyIndex, label = '') {
+            const date = item.history[historyIndex];
+            const isEditing = editingHistoryDate?.itemId === item.id
+                && editingHistoryDate.historyIndex === historyIndex;
+
+            return `
+                ${label ? `<span class="font-medium text-green-700">${label}</span> ` : ''}
+                ${isEditing ? `
+                    <input type="datetime-local" id="editHistoryDate-${item.id}-${historyIndex}"
+                           value="${dateToInputValue(date)}" aria-label="Data e hora do envio"
+                           class="px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs">
+                    <span class="ml-2 inline-flex items-center gap-2 whitespace-nowrap">
+                        <button onclick="saveHistoryDate(${item.id}, ${historyIndex})"
+                                class="text-blue-600 hover:text-blue-800 text-xs">Guardar</button>
+                        <button onclick="cancelHistoryDateEdit()"
+                                class="text-slate-500 hover:text-slate-700 text-xs">Cancelar</button>
+                    </span>
+                ` : `
+                    ${escapeHtml(date)}
+                    <button onclick="editHistoryDate(${item.id}, ${historyIndex})"
+                            aria-label="Editar data" title="Editar data"
+                            class="ml-2 inline-flex items-center text-blue-600 hover:text-blue-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" class="w-4 h-4" aria-hidden="true">
+                            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                            <path d="M16 3v4M8 3v4M3 11h18"></path>
+                        </svg>
+                    </button>
+                    <button onclick="deleteHistoryDate(${item.id}, ${historyIndex})"
+                            aria-label="Eliminar esta data" title="Eliminar esta data"
+                            class="ml-1 inline-flex items-center text-slate-400 hover:text-red-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" class="w-4 h-4" aria-hidden="true">
+                            <path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"></path>
+                        </svg>
+                    </button>
+                `}
+            `;
         }
 
         function render() {
@@ -117,33 +220,55 @@
                 const li = document.createElement('li');
                 li.className = 'p-3 rounded-lg border bg-slate-50 border-slate-200';
 
-                const lastCheck = item.history.length > 0 ? item.history[0] : null;
+                const hasHistory = item.history.length > 0;
+                const isEditing = editingItemId === item.id;
 
                 li.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <!-- Checkbox sempre desmarcado para novos registos -->
-                            <input type="checkbox" 
-                                   onchange="checkItem(${item.id})"
-                                   class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer">
-                            <span class="text-sm font-semibold text-slate-800">
-                                ${item.name}
-                            </span>
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-3 min-w-0">
+                            ${isEditing ? '' : `
+                                <!-- Checkbox sempre desmarcado para novos registos -->
+                                <input type="checkbox" 
+                                       onchange="checkItem(${item.id})"
+                                       class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer">
+                            `}
+                            ${isEditing ? `
+                                <input type="text" id="editItemInput-${item.id}" value="${escapeHtml(item.name)}"
+                                       aria-label="Nome do item" required
+                                       class="min-w-0 flex-1 px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            ` : `
+                                <span class="text-sm font-semibold text-slate-800">
+                                    ${escapeHtml(item.name)}
+                                </span>
+                            `}
                         </div>
-                        <button onclick="deleteItem(${item.id})" class="text-slate-400 hover:text-red-500 text-xs">
-                            Eliminar
-                        </button>
+                        <div class="flex gap-3 shrink-0">
+                            ${isEditing ? `
+                                <button onclick="saveItemEdit(${item.id})" class="text-blue-600 hover:text-blue-800 text-xs">
+                                    Guardar
+                                </button>
+                                <button onclick="cancelItemEdit()" class="text-slate-500 hover:text-slate-700 text-xs">
+                                    Cancelar
+                                </button>
+                            ` : `
+                                <button onclick="editItem(${item.id})" class="text-blue-600 hover:text-blue-800 text-xs">
+                                    Editar
+                                </button>
+                            `}
+                        </div>
                     </div>
 
                     <!-- Exibição do último registo e histórico -->
-                    ${lastCheck ? `
+                    ${hasHistory ? `
                         <div class="mt-2 pl-8 text-xs text-slate-600">
-                            <span class="font-medium text-green-700">Último envio:</span> ${lastCheck}
+                            <div>${renderHistoryDate(item, 0, 'Último envio:')}</div>
                             ${item.history.length > 1 ? `
                                 <details class="mt-1">
                                     <summary class="cursor-pointer text-blue-600 hover:underline">Ver histórico anterior (${item.history.length})</summary>
                                     <ul class="mt-1 space-y-1 pl-2 border-l-2 border-slate-300">
-                                        ${item.history.slice(1).map(h => `<li>${h}</li>`).join('')}
+                                        ${item.history.slice(1).map((_, index) =>
+                                            `<li>${renderHistoryDate(item, index + 1)}</li>`
+                                        ).join('')}
                                     </ul>
                                 </details>
                             ` : ''}
@@ -154,6 +279,26 @@
                 `;
                 list.appendChild(li);
             });
+        }
+
+        function clearHistory(id) {
+            items = items.map(item => {
+                if (item.id === id) {
+                    return { ...item, history: [] };
+                }
+                return item;
+            });
+            saveAndRender();
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[character]);
         }
 
         form.addEventListener('submit', (e) => {
@@ -172,5 +317,6 @@
 
         render();
     </script>
+    <footer style="text-align: right; margin-top: 170px; font-size: 24px; font-family: Brush Script MT; color: red;">2026</footer>
 </body>
 </html>
